@@ -3,6 +3,12 @@
  * for Docker builds.
  */
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import("next").NextConfig} */
 const nextConfig = {
 	reactStrictMode: true,
@@ -10,13 +16,6 @@ const nextConfig = {
 		ignoreBuildErrors: true,
 	},
 	transpilePackages: ["@dokploy/server"],
-	experimental: {
-		turbo: {
-			resolveAlias: {
-				"@dokploy/server": require("path").resolve(__dirname, "../../packages/server"),
-			},
-		},
-	},
 	/**
 	 * If you are using `appDir` then you must comment the below `i18n` config out.
 	 *
