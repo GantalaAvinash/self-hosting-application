@@ -3,7 +3,7 @@ import { and, eq, sql, gte } from "drizzle-orm";
 import { db } from "../db";
 import { emailBounces, emailReputationMetrics } from "../db/schema";
 import { addToSuppressionList } from "./email-suppressions";
-import { updateReputationMetrics } from "./email-reputation";
+import { updateReputationMetrics as updateReputationMetricsFromReputation } from "./email-reputation";
 
 export type EmailBounce = typeof emailBounces.$inferSelect;
 
@@ -52,7 +52,7 @@ export const processBounce = async (input: {
   }
 
   // Update reputation metrics (will recalculate bounce rate)
-  await updateReputationMetrics(input.emailDomainId);
+  await updateReputationMetricsFromReputation(input.emailDomainId);
 
   // Mark bounce as processed
   await db
