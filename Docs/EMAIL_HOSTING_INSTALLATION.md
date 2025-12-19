@@ -1,0 +1,615 @@
+# Email Hosting - Installation & Usage Guide
+
+## 📦 Installation Overview
+
+The email hosting feature is integrated into Dokploy and works with docker-mailserver. Here's how to set it up and use it.
+
+---
+
+## 🎯 Prerequisites
+
+Before installing, ensure you have:
+
+1. **Dokploy Platform** running (this feature is built-in)
+2. **Domain name** with DNS control
+3. **Server with ports available**:
+   - Port 25 (SMTP)
+   - Port 587 (Submission)
+   - Port 465 (SMTPS)
+   - Port 143 (IMAP)
+   - Port 993 (IMAPS)
+   - Port 110 (POP3)
+   - Port 995 (POP3S)
+   - Port 80/443 (Webmail - Roundcube)
+4. **Valid SSL certificates** for your mail domain
+5. **Reverse PTR record** (ask your hosting provider)
+
+---
+
+## 🚀 Installation Steps
+
+### Step 1: Apply Database Migration
+
+First, apply the email hosting schema to your database:
+
+```bash
+cd /Users/avinashgantala/Development/dokploy/apps/dokploy
+
+# Run migration
+pnpm drizzle-kit push:pg
+# OR if using migration files
+pnpm db:migrate
+```
+
+This creates 4 tables:
+- `email_domains` - Your email domains
+- `email_accounts` - Email accounts/mailboxes
+- `email_forwards` - Email forwarding rules
+- `email_aliases` - Email aliases
+
+### Step 2: Deploy Mail Server Stack
+
+The mail server is deployed as a Docker Compose stack in Dokploy:
+
+1. **Navigate to Dokploy Dashboard**: Open your Dokploy admin panel
+2. **Go to Projects**: Select or create a project for email hosting
+3. **Create New Compose Service**:
+   - Click "Create Service" → "Docker Compose"
+   - Name it: `mail-server`
+
+4. **Use the Email Hosting Template**:
+
+Copy the compose template from:
+```
+/Users/avinashgantala/Development/dokploy/templates/mail-server/docker-compose.yml
+```
+
+Or use this configuration:
+
+```yaml
+version: '3.8'
+
+services:
+  mailserver:
+    container_name: mailserver
+    image: docker.io/mailserver/docker-mailserver:latest
+    hostname: mail.yourdomain.com
+    env_file: mailserver.env
+    ports:
+      - "25:25"
+      - "587:587"
+      - "465:465"
+      - "143:143"
+      - "993:993"
+      - "110:110"
+      - "995:995"
+    volumes:
+      - mail-data:/var/mail
+      - mail-state:/var/mail-state
+      - mail-logs:/var/log/mail
+      - mail-config:/tmp/docker-mailserver
+      - /etc/localtime:/etc/localtime:ro
+      - ./ssl:/tmp/docker-mailserver/ssl:ro
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    networks:
+      - mail-network
+
+  roundcube:
+    container_name: roundcube
+    image: roundcube/roundcubemail:latest
+    environment:
+      - ROUNDCUBEMAIL_DEFAULT_HOST=ssl://mailserver
+      - ROUNDCUBEMAIL_SMTP_SERVER=ssl://mailserver
+      - ROUNDCUBEMAIL_DEFAULT_PORT=993
+      - ROUNDCUBEMAIL_SMTP_PORT=587
+    ports:
+      - "8080:80"
+    depends_on:
+      - mailserver
+    networks:
+      - mail-network
+    restart: unless-stopped
+
+  redis:
+    container_name: mail-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - mail-network
+
+  rspamd:
+    container_name: rspamd
+    image: rspamd/rspamd:latest
+    environment:
+      - REDIS_HOST=redis
+    ports:
+      - "11334:11334"
+    depends_on:
+      - redis
+    networks:
+      - mail-network
+    restart: unless-stopped
+
+volumes:
+  mail-data:
+  mail-state:
+  mail-logs:
+  mail-config:
+
+networks:
+  mail-network:
+    driver: bridge
+```
+
+5. **Configure Environment Variables**:
+
+Create `mailserver.env` file:
+
+```bash
+# Mailserver Configuration
+OVERRIDE_HOSTNAME=mail.yourdomain.com
+DMS_DEBUG=0
+
+# Enable services
+ENABLE_SPAMASSASSIN=1
+ENABLE_CLAMAV=0
+ENABLE_FAIL2BAN=1
+ENABLE_POSTGREY=0
+ENABLE_RSPAMD=1
+
+# SSL Configuration
+SSL_TYPE=manual
+SSL_CERT_PATH=/tmp/docker-mailserver/ssl/cert.pem
+SSL_KEY_PATH=/tmp/docker-mailserver/ssl/key.pem
+
+# Authentication
+PERMIT_DOCKER=network
+ENABLE_SASLAUTHD=0
+SASLAUTHD_MECHANISMS=rimap
+SASLAUTHD_MECH_OPTIONS=
+
+# Delivery
+ONE_DIR=1
+DMS_VMAIL_UID=5000
+DMS_VMAIL_GID=5000
+
+# DKIM/DMARC
+ENABLE_OPENDKIM=1
+ENABLE_OPENDMARC=1
+```
+
+6. **Add SSL Certificates**:
+
+Place your SSL certificates in the `ssl/` directory:
+```bash
+mkdir -p ssl
+cp /path/to/fullchain.pem ssl/cert.pem
+cp /path/to/privkey.pem ssl/key.pem
+```
+
+7. **Deploy the Stack**:
+- Click "Deploy" in Dokploy
+- Wait for all containers to start (check logs)
+
+### Step 3: Verify Installation
+
+Check if the mail server is running:
+
+```bash
+docker ps | grep mailserver
+docker logs mailserver
+```
+
+You should see:
+- `mailserver` - Main mail server
+- `roundcube` - Webmail interface
+- `mail-redis` - Cache
+- `rspamd` - Spam filter
+
+---
+
+## 🔧 Configuration
+
+### 1. Configure DNS Records
+
+For domain `example.com`, add these DNS records:
+
+**A Record**:
+```
+mail.example.com.    A    YOUR_SERVER_IP
+```
+
+**MX Record**:
+```
+example.com.    MX    10 mail.example.com.
+```
+
+**SPF Record** (TXT):
+```
+example.com.    TXT    "v=spf1 mx a:mail.example.com -all"
+```
+
+**DMARC Record** (TXT):
+```
+_dmarc.example.com.    TXT    "v=DMARC1; p=quarantine; rua=mailto:admin@example.com"
+```
+
+**DKIM Record** (generated by Dokploy):
+```
+default._domainkey.example.com.    TXT    "v=DKIM1; k=rsa; p=YOUR_PUBLIC_KEY"
+```
+
+**PTR Record** (Reverse DNS - ask your hosting provider):
+```
+YOUR_SERVER_IP    PTR    mail.example.com.
+```
+
+### 2. Configure Firewall
+
+Open required ports:
+
+```bash
+# Using UFW (Ubuntu)
+sudo ufw allow 25/tcp    # SMTP
+sudo ufw allow 587/tcp   # Submission
+sudo ufw allow 465/tcp   # SMTPS
+sudo ufw allow 143/tcp   # IMAP
+sudo ufw allow 993/tcp   # IMAPS
+sudo ufw allow 110/tcp   # POP3
+sudo ufw allow 995/tcp   # POP3S
+
+# Or using iptables
+iptables -A INPUT -p tcp --dport 25 -j ACCEPT
+iptables -A INPUT -p tcp --dport 587 -j ACCEPT
+# ... etc
+```
+
+---
+
+## 📧 How to Use
+
+### Using the Dokploy UI
+
+#### 1. **Add an Email Domain**
+
+Navigate to: **Dashboard → Email Hosting → Domains**
+
+1. Click "Add Domain"
+2. Fill in:
+   - **Domain**: `example.com`
+   - **Description**: `Company email domain`
+   - **Project**: Select project (optional)
+   - **Server**: Select server (optional)
+3. Click "Create"
+
+The domain status will show **"Pending"** until DNS is verified.
+
+#### 2. **Generate DKIM Keys**
+
+After creating a domain:
+
+1. Click on the domain
+2. Click "Generate DKIM Keys"
+3. Copy the DKIM public key
+4. Add it to your DNS as a TXT record:
+   ```
+   default._domainkey.example.com.  TXT  "v=DKIM1; k=rsa; p=MIGfMA0..."
+   ```
+
+#### 3. **Verify DNS Records**
+
+Once you've configured all DNS records:
+
+1. Click "Verify DNS"
+2. The system checks:
+   - ✅ MX record
+   - ✅ SPF record
+   - ✅ DKIM record
+   - ✅ DMARC record
+3. If all pass, domain status changes to **"Active"**
+
+#### 4. **Create Email Accounts**
+
+Navigate to: **Email Hosting → Domains → [Your Domain] → Accounts**
+
+1. Click "Add Account"
+2. Fill in:
+   - **Username**: `john` (will become john@example.com)
+   - **Full Name**: `John Doe`
+   - **Password**: Strong password
+   - **Quota**: `10000` (MB) or leave empty for unlimited
+3. Click "Create"
+
+The mailbox is instantly created in the mail server!
+
+#### 5. **Create Email Forwards**
+
+Forward emails from one address to another:
+
+1. Go to **Forwards** tab
+2. Click "Add Forward"
+3. Fill in:
+   - **Source Address**: `sales` (sales@example.com)
+   - **Destination Address**: `john@example.com`
+4. Click "Create"
+
+All emails to `sales@example.com` will forward to `john@example.com`.
+
+#### 6. **Create Email Aliases**
+
+Create alternate addresses for an account:
+
+1. Go to **Aliases** tab
+2. Click "Add Alias"
+3. Fill in:
+   - **Alias Address**: `contact` (contact@example.com)
+   - **Destination Account**: Select `john` from dropdown
+4. Click "Create"
+
+Now `john@example.com` can receive mail at both addresses.
+
+---
+
+## 🌐 Access Webmail (Roundcube)
+
+### Configure Traefik Route
+
+In Dokploy, add a Traefik route for Roundcube:
+
+1. Go to your mail server compose service
+2. Add labels for Traefik:
+
+```yaml
+services:
+  roundcube:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.roundcube.rule=Host(`webmail.example.com`)"
+      - "traefik.http.routers.roundcube.entrypoints=websecure"
+      - "traefik.http.routers.roundcube.tls.certresolver=letsencrypt"
+      - "traefik.http.services.roundcube.loadbalancer.server.port=80"
+```
+
+### Access Webmail
+
+1. Open browser: `https://webmail.example.com`
+2. Login with:
+   - **Username**: `john@example.com`
+   - **Password**: Your account password
+3. You can now send/receive emails!
+
+---
+
+## 📱 Configure Email Client
+
+Users can also use desktop/mobile email clients:
+
+### IMAP Settings (Recommended)
+
+- **Server**: `mail.example.com`
+- **Port**: `993`
+- **Security**: SSL/TLS
+- **Username**: `john@example.com`
+- **Password**: Your account password
+
+### SMTP Settings (Outgoing)
+
+- **Server**: `mail.example.com`
+- **Port**: `587`
+- **Security**: STARTTLS
+- **Authentication**: Required
+- **Username**: `john@example.com`
+- **Password**: Your account password
+
+### Supported Clients
+
+- **Desktop**: Thunderbird, Outlook, Apple Mail
+- **Mobile**: iOS Mail, Gmail app, Outlook app, K-9 Mail
+- **Web**: Roundcube (included)
+
+---
+
+## 🔍 How It Works
+
+### Architecture Flow
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    User Actions                          │
+│  1. Create Domain   2. Add Accounts   3. Verify DNS     │
+└─────────────────┬───────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│               Dokploy UI (Next.js)                      │
+│  Components: DomainManager, AccountManager, etc.        │
+└─────────────────┬───────────────────────────────────────┘
+                  │ tRPC API Calls
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│           API Layer (tRPC Router)                       │
+│  26 endpoints: createDomain, createAccount, etc.        │
+└─────────────────┬───────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│          Service Layer (Business Logic)                 │
+│  • Validation  • Database ops  • Mail server sync       │
+└─────────┬───────────────────────────────────────────────┘
+          │                           │
+          ▼                           ▼
+┌─────────────────────┐    ┌──────────────────────────────┐
+│   PostgreSQL DB     │    │   Mail Server Utilities      │
+│  • email_domains    │    │  Docker commands for:        │
+│  • email_accounts   │    │  • Create mailbox            │
+│  • email_forwards   │    │  • Delete mailbox            │
+│  • email_aliases    │    │  • Set quota                 │
+└─────────────────────┘    │  • Configure forwarding      │
+                           │  • Manage aliases            │
+                           └──────────┬───────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────┐
+│         docker-mailserver Container                     │
+│  • Postfix (SMTP)    • Dovecot (IMAP/POP3)             │
+│  • OpenDKIM          • OpenDMARC                        │
+│  • Rspamd (spam)     • Redis (cache)                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### What Happens When You Create an Account
+
+1. **User fills form** in Dokploy UI
+2. **Frontend sends** tRPC mutation `createAccount`
+3. **API validates** input (username, password, quota)
+4. **Service layer**:
+   - Hashes password with bcrypt
+   - Inserts record into `email_accounts` table
+   - Calls `createMailboxInServer(account, domain, password)`
+5. **Mail server utility**:
+   - Executes: `docker exec mailserver setup email add john@example.com "password"`
+   - Creates mailbox in `/var/mail/example.com/john`
+   - Sets up IMAP/SMTP access
+6. **Account is ready** - user can immediately send/receive emails!
+
+### Email Flow
+
+**Incoming Email**:
+```
+Internet → MX Record (mail.example.com) → Port 25 (Postfix) 
+→ Spam Check (Rspamd) → Virus Scan (optional) 
+→ Deliver to Mailbox (/var/mail/example.com/john)
+→ User reads via IMAP (Port 993) or Webmail
+```
+
+**Outgoing Email**:
+```
+User sends via SMTP (Port 587) → Authentication check 
+→ DKIM signing → SPF check → Send to recipient
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+### Mail Server Not Starting
+
+```bash
+# Check logs
+docker logs mailserver
+
+# Common issues:
+# - SSL certificates missing/invalid
+# - Ports already in use
+# - Hostname not set correctly
+```
+
+### DNS Verification Fails
+
+```bash
+# Test DNS records manually
+dig MX example.com
+dig TXT example.com  # SPF
+dig TXT _dmarc.example.com
+dig TXT default._domainkey.example.com  # DKIM
+
+# DNS can take 24-48 hours to propagate
+```
+
+### Can't Send/Receive Emails
+
+1. **Check firewall**: Ensure ports 25, 587, 993 are open
+2. **Check PTR record**: Must point to mail.example.com
+3. **Check spam score**: Use https://www.mail-tester.com
+4. **Check logs**: `docker logs mailserver`
+
+### Authentication Fails
+
+```bash
+# Test SMTP auth
+openssl s_client -connect mail.example.com:587 -starttls smtp
+
+# Test IMAP auth
+openssl s_client -connect mail.example.com:993
+```
+
+---
+
+## 🎓 Best Practices
+
+1. **Start small**: Test with one domain first
+2. **Use strong passwords**: At least 16 characters for email accounts
+3. **Monitor logs**: Check `docker logs mailserver` regularly
+4. **Set up backups**: Backup `/var/mail` volume
+5. **Configure SPF/DKIM/DMARC**: Essential for deliverability
+6. **Use SSL/TLS**: Always encrypt connections
+7. **Set quotas**: Prevent mailboxes from filling disk
+8. **Regular updates**: Keep docker-mailserver image updated
+
+---
+
+## 📊 Monitoring
+
+### Check Mail Server Health
+
+```bash
+# Container status
+docker ps | grep mail
+
+# Mail queue
+docker exec mailserver mailq
+
+# Recent logs
+docker logs mailserver --tail 100
+
+# Check disk usage
+docker exec mailserver df -h /var/mail
+```
+
+### Check Account Usage
+
+In Dokploy UI:
+- Go to Email Hosting → Accounts
+- View quota usage for each account
+- Accounts near quota limit show warnings
+
+---
+
+## 🔐 Security Considerations
+
+1. **Strong Passwords**: Enforce minimum 12 characters
+2. **Fail2Ban**: Enabled by default, blocks brute force attacks
+3. **SSL/TLS**: Required for all connections
+4. **SPF**: Prevents email spoofing
+5. **DKIM**: Signs outgoing emails
+6. **DMARC**: Policies for handling failures
+7. **Regular Updates**: Keep mail server software updated
+8. **Backup Strategy**: Regular backups of mail data
+9. **Monitoring**: Watch for suspicious activity
+
+---
+
+## 📚 Additional Resources
+
+- **docker-mailserver docs**: https://docker-mailserver.github.io
+- **Postfix docs**: http://www.postfix.org/documentation.html
+- **Dovecot docs**: https://doc.dovecot.org
+- **DKIM verification**: https://dkimcore.org/tools
+- **Mail tester**: https://www.mail-tester.com
+- **MX Toolbox**: https://mxtoolbox.com
+
+---
+
+## 🎉 You're Ready!
+
+Your email hosting system is now:
+- ✅ **Installed**: Mail server running in Docker
+- ✅ **Configured**: DNS records set up
+- ✅ **Operational**: Ready to create accounts and send/receive emails
+- ✅ **Managed**: Full control through Dokploy UI
+
+Start by creating your first domain and email account!
+
+For support, check the logs and troubleshooting section above.

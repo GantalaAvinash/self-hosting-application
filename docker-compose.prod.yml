@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dokploy-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dokploy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-dokploy}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dokploy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dokploy-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: dokploy-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - dokploy-network
+
+  dokploy:
+    image: dokploy/dokploy:${DOKPLOY_VERSION:-latest}
+    container_name: dokploy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-dokploy}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dokploy}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+      NODE_ENV: production
+      PORT: 3000
+      MAILSERVER_CONTAINER_NAME: ${MAILSERVER_CONTAINER_NAME:-mailserver}
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dokploy_data:/etc/dokploy
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+
+  traefik:
+    image: traefik:v3.6.1
+    container_name: dokploy-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.swarmmode=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_config:/etc/traefik
+      - traefik_dynamic:/etc/traefik/dynamic
+      - letsencrypt:/letsencrypt
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  dokploy_data:
+    driver: local
+  traefik_config:
+    driver: local
+  traefik_dynamic:
+    driver: local
+  letsencrypt:
+    driver: local
+
+networks:
+  dokploy-network:
+    driver: bridge
+
