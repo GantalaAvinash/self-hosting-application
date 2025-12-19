@@ -151,14 +151,15 @@ const MENU: Menu = {
 			url: "/dashboard/email",
 			icon: Mail,
 			// Always enabled for owners/admins, or members with email access
+			// Show by default if auth is not loaded yet (will be filtered once auth loads)
 			isEnabled: ({ auth, isCloud }) => {
 				if (isCloud) return false;
-				if (!auth) return false;
-				return !!(
-					auth.role === "owner" ||
-					auth.role === "admin" ||
-					auth.canAccessToEmail === true
-				);
+				// If auth is not loaded yet, show the item (it will be re-evaluated when auth loads)
+				if (!auth) return true;
+				// Always show for owners and admins
+				if (auth.role === "owner" || auth.role === "admin") return true;
+				// Show for members with email access
+				return auth.canAccessToEmail === true;
 			},
 		},
 		{
