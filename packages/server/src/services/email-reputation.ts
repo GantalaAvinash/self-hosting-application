@@ -254,6 +254,46 @@ export const getReputationSummary = async (emailDomainId: string) => {
 };
 
 /**
+ * Increment sent count for a domain
+ */
+export const incrementSentCount = async (
+  emailDomainId: string,
+  amount: number = 1
+): Promise<void> => {
+  const metrics = await getReputationMetrics(emailDomainId);
+  await db
+    .update(emailReputationMetrics)
+    .set({
+      totalSent: metrics.totalSent + amount,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(emailReputationMetrics.metricId, metrics.metricId));
+  
+  // Recalculate rates
+  await updateReputationMetrics(emailDomainId);
+};
+
+/**
+ * Increment delivered count for a domain
+ */
+export const incrementDeliveredCount = async (
+  emailDomainId: string,
+  amount: number = 1
+): Promise<void> => {
+  const metrics = await getReputationMetrics(emailDomainId);
+  await db
+    .update(emailReputationMetrics)
+    .set({
+      totalDelivered: metrics.totalDelivered + amount,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(emailReputationMetrics.metricId, metrics.metricId));
+  
+  // Recalculate rates
+  await updateReputationMetrics(emailDomainId);
+};
+
+/**
  * Alert if reputation is poor
  */
 export const checkReputationThresholds = async (emailDomainId: string): Promise<{
