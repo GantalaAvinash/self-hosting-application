@@ -106,7 +106,6 @@ const updateReputationMetrics = async (emailDomainId: string) => {
   });
 
   // Count bounces for today
-  const today = new Date().toISOString().split("T")[0];
   const bounceCount = await db
     .select({ count: sql<number>`count(*)` })
     .from(emailBounces)
