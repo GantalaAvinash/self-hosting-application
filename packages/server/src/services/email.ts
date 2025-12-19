@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import * as bcrypt from "bcrypt";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import {
   emailAccounts,
@@ -90,16 +90,61 @@ export const findEmailDomainsByProjectId = async (projectId: string) => {
 export const findEmailDomainsByOrganizationId = async (
   organizationId: string
 ) => {
-  return await db.query.emailDomains.findMany({
-    where: eq(emailDomains.organizationId, organizationId),
-    with: {
-      project: true,
-      accounts: true,
-    },
-    orderBy: (emailDomains: any, { desc }: any) => [
-      desc(emailDomains.createdAt),
-    ],
-  });
+  try {
+    // Try query with relations first
+    const domains = await db.query.emailDomains.findMany({
+      where: eq(emailDomains.organizationId, organizationId),
+      with: {
+        project: true,
+        accounts: true,
+      },
+      orderBy: (emailDomains: any, { desc }: any) => [
+        desc(emailDomains.createdAt),
+      ],
+    });
+    return domains || [];
+  } catch (error) {
+    console.error("Error fetching email domains with relations:", error);
+    // Fallback to simple query without relations if relations fail
+    try {
+      const domains = await db
+        .select()
+        .from(emailDomains)
+        .where(eq(emailDomains.organizationId, organizationId))
+        .orderBy(desc(emailDomains.createdAt));
+      
+      // Fetch accounts separately if needed
+      const domainIds = domains.map((d) => d.emailDomainId);
+      let accountsMap: Record<string, any[]> = {};
+      
+      if (domainIds.length > 0) {
+        try {
+          const accounts = await db
+            .select()
+            .from(emailAccounts)
+            .where(inArray(emailAccounts.emailDomainId, domainIds));
+          
+          accounts.forEach((account) => {
+            if (!accountsMap[account.emailDomainId]) {
+              accountsMap[account.emailDomainId] = [];
+            }
+            accountsMap[account.emailDomainId].push(account);
+          });
+        } catch (accountsError) {
+          console.error("Error fetching accounts:", accountsError);
+        }
+      }
+      
+      return domains.map((domain) => ({
+        ...domain,
+        project: null,
+        accounts: accountsMap[domain.emailDomainId] || [],
+      }));
+    } catch (fallbackError) {
+      console.error("Fallback query also failed:", fallbackError);
+      return [];
+    }
+  }
 };
 
 export const updateEmailDomain = async (

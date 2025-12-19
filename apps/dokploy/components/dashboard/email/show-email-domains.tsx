@@ -52,7 +52,9 @@ import { toast } from "sonner";
 
 export const ShowEmailDomains = () => {
 	const utils = api.useUtils();
-	const { data, isLoading } = api.email.getAllDomains.useQuery();
+	const { data, isLoading, error } = api.email.getAllDomains.useQuery(undefined, {
+		retry: 1,
+	});
 	const { mutateAsync: removeDomain } = api.email.removeDomain.useMutation();
 	const { mutateAsync: verifyDns } = api.email.verifyDNS.useMutation();
 	const { data: member } = api.user.get.useQuery();
@@ -65,7 +67,7 @@ export const ShowEmailDomains = () => {
 	const canDeleteDomains =
 		member?.canDeleteEmailDomains || member?.role !== "member";
 
-	const filteredDomains = data?.filter((domain) =>
+	const filteredDomains = (data || []).filter((domain) =>
 		domain.domain.toLowerCase().includes(debouncedSearchQuery.toLowerCase()),
 	);
 
@@ -147,7 +149,19 @@ export const ShowEmailDomains = () => {
 					</div>
 				</div>
 
-				{isLoading ? (
+				{error ? (
+					<Card className="flex h-48 flex-col items-center justify-center border-destructive">
+						<CardContent className="flex flex-col items-center gap-4 pt-6">
+							<AlertCircle className="h-12 w-12 text-destructive" />
+							<div className="text-center">
+								<h3 className="font-semibold text-destructive">Error loading email domains</h3>
+								<p className="text-sm text-muted-foreground">
+									{error.message || "Failed to load email domains. Please try again."}
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+				) : isLoading ? (
 					<div className="flex h-48 items-center justify-center">
 						<div className="text-center">
 							<ServerIcon className="mx-auto h-8 w-8 animate-pulse text-muted-foreground" />

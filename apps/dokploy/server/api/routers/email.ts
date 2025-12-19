@@ -152,31 +152,36 @@ export const emailRouter = createTRPCRouter({
     }),
 
   getAllDomains: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role === "member") {
-      await checkEmailDomainAccess(
-        ctx.user.id,
-        null,
-        ctx.session.activeOrganizationId,
-        "access"
-      );
-    }
-    const domains = await findEmailDomainsByOrganizationId(
-      ctx.session.activeOrganizationId
-    );
-
-    // Filter domains based on accessedServices for members
-    if (ctx.user.role === "member") {
-      const { findMemberById } = await import("@dokploy/server/services/user");
-      const member = await findMemberById(
-        ctx.user.id,
+    try {
+      if (ctx.user.role === "member") {
+        await checkEmailDomainAccess(
+          ctx.user.id,
+          null,
+          ctx.session.activeOrganizationId,
+          "access"
+        );
+      }
+      const domains = await findEmailDomainsByOrganizationId(
         ctx.session.activeOrganizationId
       );
-      return domains.filter((domain) =>
-        member.accessedServices.includes(domain.emailDomainId)
-      );
-    }
 
-    return domains;
+      // Filter domains based on accessedServices for members
+      if (ctx.user.role === "member") {
+        const { findMemberById } = await import("@dokploy/server/services/user");
+        const member = await findMemberById(
+          ctx.user.id,
+          ctx.session.activeOrganizationId
+        );
+        return domains.filter((domain) =>
+          member.accessedServices.includes(domain.emailDomainId)
+        );
+      }
+
+      return domains || [];
+    } catch (error) {
+      console.error("Error in getAllDomains:", error);
+      return [];
+    }
   }),
 
   updateDomain: protectedProcedure
