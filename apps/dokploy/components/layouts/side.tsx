@@ -453,14 +453,19 @@ function createMenuForAuthUser(opts: {
 	return {
 		// Filter the home items based on the user's role and permissions
 		// Calls the `isEnabled` function if it exists to determine if the item should be displayed
-		home: MENU.home.filter((item) =>
-			!item.isEnabled
-				? true
-				: item.isEnabled({
-						auth: opts.auth,
-						isCloud: opts.isCloud,
-					}),
-		),
+		home: MENU.home.filter((item) => {
+			if (!item.isEnabled) return true;
+			try {
+				return item.isEnabled({
+					auth: opts.auth,
+					isCloud: opts.isCloud,
+				});
+			} catch (error) {
+				console.error(`Error checking if menu item "${item.title}" is enabled:`, error);
+				// Default to showing the item if there's an error (safer)
+				return true;
+			}
+		}),
 		// Filter the settings items based on the user's role and permissions
 		// Calls the `isEnabled` function if it exists to determine if the item should be displayed
 		settings: MENU.settings.filter((item) =>
