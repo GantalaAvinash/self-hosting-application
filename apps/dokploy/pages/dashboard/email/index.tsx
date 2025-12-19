@@ -19,43 +19,34 @@ EmailHosting.getLayout = (page: ReactElement) => {
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
 	try {
-		const { req, res } = context;
-		const { user, session } = await validateRequest(req);
+	const { req, res } = context;
+	const { user, session } = await validateRequest(req);
 
-		if (!user) {
-			return {
-				redirect: {
-					permanent: true,
-					destination: "/",
-				},
-			};
-		}
-
-		const helpers = createServerSideHelpers({
-			router: appRouter,
-			ctx: {
-				req: req as any,
-				res: res as any,
-				db: null as any,
-				session: session as any,
-				user: user as any,
+	if (!user) {
+		return {
+			redirect: {
+				permanent: true,
+				destination: "/",
 			},
-			transformer: superjson,
-		});
+		};
+	}
 
-		if (user.role === "member") {
-			try {
-				const member = await helpers.user.get.fetch();
-				if (!member?.canAccessToEmail) {
-					return {
-						redirect: {
-							permanent: true,
-							destination: "/dashboard/projects",
-						},
-					};
-				}
-			} catch (error) {
-				console.error("Error checking member email access:", error);
+	const helpers = createServerSideHelpers({
+		router: appRouter,
+		ctx: {
+			req: req as any,
+			res: res as any,
+			db: null as any,
+			session: session as any,
+			user: user as any,
+		},
+		transformer: superjson,
+	});
+
+	if (user.role === "member") {
+		try {
+			const member = await helpers.user.get.fetch();
+			if (!member?.canAccessToEmail) {
 				return {
 					redirect: {
 						permanent: true,
@@ -63,20 +54,29 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 					},
 				};
 			}
-		}
-
-		try {
-			await helpers.email.getAllDomains.prefetch();
 		} catch (error) {
+				console.error("Error checking member email access:", error);
+			return {
+				redirect: {
+					permanent: true,
+					destination: "/dashboard/projects",
+				},
+			};
+		}
+	}
+
+	try {
+		await helpers.email.getAllDomains.prefetch();
+	} catch (error) {
 			console.error("Error prefetching email domains:", error);
 			// Email domains might not exist yet, continue anyway
-		}
+	}
 
-		return {
-			props: {
-				trpcState: helpers.dehydrate(),
-			},
-		};
+	return {
+		props: {
+			trpcState: helpers.dehydrate(),
+		},
+	};
 	} catch (error) {
 		console.error("Error in getServerSideProps for email page:", error);
 		// Return empty props to prevent 400 error

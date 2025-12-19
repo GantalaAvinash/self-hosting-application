@@ -93,15 +93,15 @@ export const findEmailDomainsByOrganizationId = async (
   try {
     // Try query with relations first
     const domains = await db.query.emailDomains.findMany({
-      where: eq(emailDomains.organizationId, organizationId),
-      with: {
-        project: true,
-        accounts: true,
-      },
-      orderBy: (emailDomains: any, { desc }: any) => [
-        desc(emailDomains.createdAt),
-      ],
-    });
+    where: eq(emailDomains.organizationId, organizationId),
+    with: {
+      project: true,
+      accounts: true,
+    },
+    orderBy: (emailDomains: any, { desc }: any) => [
+      desc(emailDomains.createdAt),
+    ],
+  });
     return domains || [];
   } catch (error) {
     console.error("Error fetching email domains with relations:", error);

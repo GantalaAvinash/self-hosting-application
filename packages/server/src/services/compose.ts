@@ -290,11 +290,11 @@ export const deployCompose = async ({
 		command += `echo "\n\n❌ Compose deployment failed. Check the logs above for details." >> ${deployment.logPath};`;
 		
 		try {
-			if (compose.serverId) {
-				await execAsyncRemote(compose.serverId, command);
-			} else {
-				await execAsync(command);
-			}
+		if (compose.serverId) {
+			await execAsyncRemote(compose.serverId, command);
+		} else {
+			await execAsync(command);
+		}
 		} catch (logError) {
 			console.error("Failed to write error to log file:", logError);
 		}
@@ -394,11 +394,11 @@ export const rebuildCompose = async ({
 		command += `echo "\n\n❌ Compose rebuild failed. Check the logs above for details." >> ${deployment.logPath};`;
 		
 		try {
-			if (compose.serverId) {
-				await execAsyncRemote(compose.serverId, command);
-			} else {
-				await execAsync(command);
-			}
+		if (compose.serverId) {
+			await execAsyncRemote(compose.serverId, command);
+		} else {
+			await execAsync(command);
+		}
 		} catch (logError) {
 			console.error("Failed to write error to log file:", logError);
 		}

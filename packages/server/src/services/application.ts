@@ -239,11 +239,11 @@ export const deployApplication = async ({
 		command += `echo "\n\n❌ Deployment failed. Check the logs above for details." >> ${deployment.logPath};`;
 		
 		try {
-			if (serverId) {
-				await execAsyncRemote(serverId, command);
-			} else {
-				await execAsync(command);
-			}
+		if (serverId) {
+			await execAsyncRemote(serverId, command);
+		} else {
+			await execAsync(command);
+		}
 		} catch (logError) {
 			console.error("Failed to write error to log file:", logError);
 		}
@@ -344,11 +344,11 @@ export const rebuildApplication = async ({
 		command += `echo "\n\n❌ Rebuild failed. Check the logs above for details." >> ${deployment.logPath};`;
 		
 		try {
-			if (serverId) {
-				await execAsyncRemote(serverId, command);
-			} else {
-				await execAsync(command);
-			}
+		if (serverId) {
+			await execAsyncRemote(serverId, command);
+		} else {
+			await execAsync(command);
+		}
 		} catch (logError) {
 			console.error("Failed to write error to log file:", logError);
 		}
