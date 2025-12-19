@@ -17,9 +17,14 @@ RUN pnpm install -g tsx
 # Install dependencies (with dev dependencies for build)
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
-# Build both server and dokploy in one step to maintain workspace resolution
-RUN pnpm --filter=@dokploy/server build && \
-    pnpm --filter=./apps/dokploy run build
+# Build server package first
+RUN pnpm --filter=@dokploy/server build
+
+# Verify server package is built and linked
+RUN ls -la /usr/src/app/packages/server/dist/ | head -5 || echo "Server dist not found"
+
+# Build dokploy app (Next.js will use the built server package)
+RUN pnpm --filter=./apps/dokploy run build
 
 # Deploy only production dependencies for dokploy app
 RUN pnpm --filter=./apps/dokploy --prod deploy /prod/dokploy
