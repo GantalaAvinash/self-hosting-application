@@ -37,7 +37,7 @@ import { api } from "@/utils/api";
 const addServerDomain = z
 	.object({
 		domain: z.string().trim().toLowerCase(),
-		letsEncryptEmail: z.string(),
+		letsEncryptEmail: z.string().optional(),
 		https: z.boolean().optional(),
 		certificateType: z.enum(["letsencrypt", "none", "custom"]),
 	})
@@ -51,15 +51,22 @@ const addServerDomain = z
 		}
 		if (
 			data.https &&
-			data.certificateType === "letsencrypt" &&
-			!data.letsEncryptEmail
+			data.certificateType === "letsencrypt"
 		) {
+			if (!data.letsEncryptEmail || data.letsEncryptEmail.trim() === "") {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				message:
 					"LetsEncrypt email is required when certificate type is letsencrypt",
 				path: ["letsEncryptEmail"],
 			});
+			} else if (!z.string().email().safeParse(data.letsEncryptEmail).success) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Invalid email address",
+					path: ["letsEncryptEmail"],
+				});
+			}
 		}
 	});
 
@@ -178,11 +185,16 @@ export const WebDomain = () => {
 												</FormLabel>
 												<FormControl>
 													<Input
+														type="email"
+														autoComplete="email"
 														className="w-full"
-														placeholder={"Dp4kz@example.com"}
+														placeholder={"admin@example.com"}
 														{...field}
 													/>
 												</FormControl>
+												<FormDescription>
+													Email address for Let's Encrypt certificate notifications
+												</FormDescription>
 												<FormMessage />
 											</FormItem>
 										);

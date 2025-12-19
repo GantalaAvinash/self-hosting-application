@@ -214,6 +214,8 @@ export const ProfileForm = () => {
 														<FormLabel>{t("settings.profile.email")}</FormLabel>
 														<FormControl>
 															<Input
+																type="email"
+																autoComplete="email"
 																placeholder={t("settings.profile.email")}
 																{...field}
 															/>

@@ -222,20 +222,38 @@ export const deployApplication = async ({
 		});
 	} catch (error) {
 		let command = "";
+		let errorDetails = "";
 
-		// Only log details for non-ExecError errors
-		if (!(error instanceof ExecError)) {
+		if (error instanceof ExecError) {
+			errorDetails = error.getDetailedMessage();
+			const encodedDetails = encodeBase64(errorDetails);
+			command += `echo "${encodedDetails}" | base64 -d >> "${deployment.logPath}";`;
+		} else {
 			const message = error instanceof Error ? error.message : String(error);
-			const encodedMessage = encodeBase64(message);
+			const stack = error instanceof Error ? error.stack : "";
+			const fullError = stack ? `${message}\n\nStack trace:\n${stack}` : message;
+			const encodedMessage = encodeBase64(fullError);
 			command += `echo "${encodedMessage}" | base64 -d >> "${deployment.logPath}";`;
 		}
 
-		command += `echo "\nError occurred ❌, check the logs for details." >> ${deployment.logPath};`;
-		if (serverId) {
-			await execAsyncRemote(serverId, command);
-		} else {
-			await execAsync(command);
+		command += `echo "\n\n❌ Deployment failed. Check the logs above for details." >> ${deployment.logPath};`;
+		
+		try {
+			if (serverId) {
+				await execAsyncRemote(serverId, command);
+			} else {
+				await execAsync(command);
+			}
+		} catch (logError) {
+			console.error("Failed to write error to log file:", logError);
 		}
+
+		const errorMessage = error instanceof ExecError 
+			? error.getDetailedMessage()
+			: error instanceof Error 
+				? error.message 
+				: String(error);
+
 		await updateDeploymentStatus(deployment.deploymentId, "error");
 		await updateApplicationStatus(applicationId, "error");
 
@@ -243,8 +261,7 @@ export const deployApplication = async ({
 			projectName: application.environment.project.name,
 			applicationName: application.name,
 			applicationType: "application",
-			// @ts-ignore
-			errorMessage: error?.message || "Error building",
+			errorMessage: errorMessage.substring(0, 500),
 			buildLink,
 			organizationId: application.environment.project.organizationId,
 		});
@@ -310,20 +327,32 @@ export const rebuildApplication = async ({
 		});
 	} catch (error) {
 		let command = "";
+		let errorDetails = "";
 
-		// Only log details for non-ExecError errors
-		if (!(error instanceof ExecError)) {
+		if (error instanceof ExecError) {
+			errorDetails = error.getDetailedMessage();
+			const encodedDetails = encodeBase64(errorDetails);
+			command += `echo "${encodedDetails}" | base64 -d >> "${deployment.logPath}";`;
+		} else {
 			const message = error instanceof Error ? error.message : String(error);
-			const encodedMessage = encodeBase64(message);
+			const stack = error instanceof Error ? error.stack : "";
+			const fullError = stack ? `${message}\n\nStack trace:\n${stack}` : message;
+			const encodedMessage = encodeBase64(fullError);
 			command += `echo "${encodedMessage}" | base64 -d >> "${deployment.logPath}";`;
 		}
 
-		command += `echo "\nError occurred ❌, check the logs for details." >> ${deployment.logPath};`;
-		if (serverId) {
-			await execAsyncRemote(serverId, command);
-		} else {
-			await execAsync(command);
+		command += `echo "\n\n❌ Rebuild failed. Check the logs above for details." >> ${deployment.logPath};`;
+		
+		try {
+			if (serverId) {
+				await execAsyncRemote(serverId, command);
+			} else {
+				await execAsync(command);
+			}
+		} catch (logError) {
+			console.error("Failed to write error to log file:", logError);
 		}
+
 		await updateDeploymentStatus(deployment.deploymentId, "error");
 		await updateApplicationStatus(applicationId, "error");
 		throw error;

@@ -191,7 +191,12 @@ const Register = ({ isCloud }: Props) => {
 												<FormItem>
 													<FormLabel>Email</FormLabel>
 													<FormControl>
-														<Input placeholder="email@dokploy.com" {...field} />
+														<Input
+															type="email"
+															autoComplete="email"
+															placeholder="email@dokploy.com"
+															{...field}
+														/>
 													</FormControl>
 													<FormMessage />
 												</FormItem>

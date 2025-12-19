@@ -273,20 +273,38 @@ export const deployCompose = async ({
 		});
 	} catch (error) {
 		let command = "";
+		let errorDetails = "";
 
-		// Only log details for non-ExecError errors
-		if (!(error instanceof ExecError)) {
+		if (error instanceof ExecError) {
+			errorDetails = error.getDetailedMessage();
+			const encodedDetails = encodeBase64(errorDetails);
+			command += `echo "${encodedDetails}" | base64 -d >> "${deployment.logPath}";`;
+		} else {
 			const message = error instanceof Error ? error.message : String(error);
-			const encodedMessage = encodeBase64(message);
+			const stack = error instanceof Error ? error.stack : "";
+			const fullError = stack ? `${message}\n\nStack trace:\n${stack}` : message;
+			const encodedMessage = encodeBase64(fullError);
 			command += `echo "${encodedMessage}" | base64 -d >> "${deployment.logPath}";`;
 		}
 
-		command += `echo "\nError occurred ❌, check the logs for details." >> ${deployment.logPath};`;
-		if (compose.serverId) {
-			await execAsyncRemote(compose.serverId, command);
-		} else {
-			await execAsync(command);
+		command += `echo "\n\n❌ Compose deployment failed. Check the logs above for details." >> ${deployment.logPath};`;
+		
+		try {
+			if (compose.serverId) {
+				await execAsyncRemote(compose.serverId, command);
+			} else {
+				await execAsync(command);
+			}
+		} catch (logError) {
+			console.error("Failed to write error to log file:", logError);
 		}
+
+		const errorMessage = error instanceof ExecError 
+			? error.getDetailedMessage()
+			: error instanceof Error 
+				? error.message 
+				: String(error);
+
 		await updateDeploymentStatus(deployment.deploymentId, "error");
 		await updateCompose(composeId, {
 			composeStatus: "error",
@@ -295,8 +313,7 @@ export const deployCompose = async ({
 			projectName: compose.environment.project.name,
 			applicationName: compose.name,
 			applicationType: "compose",
-			// @ts-ignore
-			errorMessage: error?.message || "Error building",
+			errorMessage: errorMessage.substring(0, 500),
 			buildLink,
 			organizationId: compose.environment.project.organizationId,
 		});
@@ -360,20 +377,32 @@ export const rebuildCompose = async ({
 		});
 	} catch (error) {
 		let command = "";
+		let errorDetails = "";
 
-		// Only log details for non-ExecError errors
-		if (!(error instanceof ExecError)) {
+		if (error instanceof ExecError) {
+			errorDetails = error.getDetailedMessage();
+			const encodedDetails = encodeBase64(errorDetails);
+			command += `echo "${encodedDetails}" | base64 -d >> "${deployment.logPath}";`;
+		} else {
 			const message = error instanceof Error ? error.message : String(error);
-			const encodedMessage = encodeBase64(message);
+			const stack = error instanceof Error ? error.stack : "";
+			const fullError = stack ? `${message}\n\nStack trace:\n${stack}` : message;
+			const encodedMessage = encodeBase64(fullError);
 			command += `echo "${encodedMessage}" | base64 -d >> "${deployment.logPath}";`;
 		}
 
-		command += `echo "\nError occurred ❌, check the logs for details." >> ${deployment.logPath};`;
-		if (compose.serverId) {
-			await execAsyncRemote(compose.serverId, command);
-		} else {
-			await execAsync(command);
+		command += `echo "\n\n❌ Compose rebuild failed. Check the logs above for details." >> ${deployment.logPath};`;
+		
+		try {
+			if (compose.serverId) {
+				await execAsyncRemote(compose.serverId, command);
+			} else {
+				await execAsync(command);
+			}
+		} catch (logError) {
+			console.error("Failed to write error to log file:", logError);
 		}
+
 		await updateDeploymentStatus(deployment.deploymentId, "error");
 		await updateCompose(composeId, {
 			composeStatus: "error",

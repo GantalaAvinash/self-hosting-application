@@ -64,7 +64,25 @@ export const deploymentWorker = new Worker(
 				}
 			}
 		} catch (error) {
-			console.log("Error", error);
+			console.error("Deployment Worker Error:", error);
+			
+			try {
+				if (job.data.applicationType === "application") {
+					await updateApplicationStatus(job.data.applicationId, "error");
+				} else if (job.data.applicationType === "compose") {
+					await updateCompose(job.data.composeId, {
+						composeStatus: "error",
+					});
+				} else if (job.data.applicationType === "application-preview") {
+					await updatePreviewDeployment(job.data.previewDeploymentId, {
+						previewStatus: "error",
+					});
+				}
+			} catch (statusError) {
+				console.error("Failed to update deployment status:", statusError);
+			}
+			
+			throw error;
 		}
 	},
 	{

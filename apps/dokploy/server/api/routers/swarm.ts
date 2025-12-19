@@ -14,17 +14,21 @@ export const swarmRouter = createTRPCRouter({
 	getNodes: protectedProcedure
 		.input(
 			z.object({
-				serverId: z.string().optional(),
+				serverId: z.string().optional().nullable(),
 			}),
 		)
 		.query(async ({ input, ctx }) => {
-			if (input.serverId) {
-				const server = await findServerById(input.serverId);
+			const serverId = input.serverId || undefined;
+			
+			if (serverId) {
+				const server = await findServerById(serverId);
 				if (server.organizationId !== ctx.session?.activeOrganizationId) {
 					throw new TRPCError({ code: "UNAUTHORIZED" });
 				}
 			}
-			return await getSwarmNodes(input.serverId);
+			
+			const nodes = await getSwarmNodes(serverId);
+			return nodes || [];
 		}),
 	getNodeInfo: protectedProcedure
 		.input(z.object({ nodeId: z.string(), serverId: z.string().optional() }))

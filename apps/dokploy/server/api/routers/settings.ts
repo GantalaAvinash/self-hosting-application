@@ -801,8 +801,8 @@ export const settingsRouter = createTRPCRouter({
 				serverId: z.string().optional(),
 				additionalPorts: z.array(
 					z.object({
-						targetPort: z.number(),
-						publishedPort: z.number(),
+						targetPort: z.number().min(1).max(65535),
+						publishedPort: z.number().min(1).max(65535),
 						protocol: z.enum(["tcp", "udp", "sctp"]),
 					}),
 				),
@@ -816,12 +816,67 @@ export const settingsRouter = createTRPCRouter({
 						message: "Please set a serverId to update Traefik ports",
 					});
 				}
-				const env = await readEnvironmentVariables(
-					"dokploy-traefik",
-					input?.serverId,
-				);
 
-				for (const port of input.additionalPorts) {
+				const TRAEFIK_PORT =
+					Number.parseInt(process.env.TRAEFIK_PORT!, 10) || 80;
+				const TRAEFIK_SSL_PORT =
+					Number.parseInt(process.env.TRAEFIK_SSL_PORT!, 10) || 443;
+				const TRAEFIK_HTTP3_PORT =
+					Number.parseInt(process.env.TRAEFIK_HTTP3_PORT!, 10) || 443;
+
+				const defaultPorts = [
+					{ port: TRAEFIK_PORT, name: "Traefik HTTP (TRAEFIK_PORT)" },
+					{ port: TRAEFIK_SSL_PORT, name: "Traefik HTTPS (TRAEFIK_SSL_PORT)" },
+					{ port: TRAEFIK_HTTP3_PORT, name: "Traefik HTTP3 (TRAEFIK_HTTP3_PORT)" },
+				];
+
+				const seenPorts = new Map<
+					string,
+					{ port: number; protocol: string; index: number }
+				>();
+
+				for (let i = 0; i < input.additionalPorts.length; i++) {
+					const port = input.additionalPorts[i];
+
+					if (port.publishedPort < 1 || port.publishedPort > 65535) {
+						throw new TRPCError({
+							code: "BAD_REQUEST",
+							message: `Published port ${port.publishedPort} must be between 1 and 65535`,
+						});
+					}
+
+					if (port.targetPort < 1 || port.targetPort > 65535) {
+						throw new TRPCError({
+							code: "BAD_REQUEST",
+							message: `Target port ${port.targetPort} must be between 1 and 65535`,
+						});
+					}
+
+					const portKey = `${port.publishedPort}/${port.protocol}`;
+
+					if (seenPorts.has(portKey)) {
+						const existing = seenPorts.get(portKey)!;
+						throw new TRPCError({
+							code: "CONFLICT",
+							message: `Duplicate port mapping: Port ${port.publishedPort}/${port.protocol} is already defined at position ${existing.index + 1} and position ${i + 1}`,
+						});
+					}
+
+					seenPorts.set(portKey, {
+						port: port.publishedPort,
+						protocol: port.protocol,
+						index: i,
+					});
+
+					for (const defaultPort of defaultPorts) {
+						if (port.publishedPort === defaultPort.port) {
+							throw new TRPCError({
+								code: "CONFLICT",
+								message: `Port ${port.publishedPort} conflicts with ${defaultPort.name}. This port is reserved for Traefik core functionality.`,
+							});
+						}
+					}
+
 					const portCheck = await checkPortInUse(
 						port.publishedPort,
 						input.serverId,
@@ -829,10 +884,15 @@ export const settingsRouter = createTRPCRouter({
 					if (portCheck.isInUse) {
 						throw new TRPCError({
 							code: "CONFLICT",
-							message: `Port ${port.targetPort} is already in use by ${portCheck.conflictingContainer}`,
+							message: `Published port ${port.publishedPort} is already in use by container "${portCheck.conflictingContainer}". Please stop the conflicting service or use a different port.`,
 						});
 					}
 				}
+
+				const env = await readEnvironmentVariables(
+					"dokploy-traefik",
+					input?.serverId,
+				);
 				const preparedEnv = prepareEnvironmentVariables(env);
 
 				await writeTraefikSetup({
@@ -842,6 +902,9 @@ export const settingsRouter = createTRPCRouter({
 				});
 				return true;
 			} catch (error) {
+				if (error instanceof TRPCError) {
+					throw error;
+				}
 				throw new TRPCError({
 					code: "BAD_REQUEST",
 					message:

@@ -370,16 +370,55 @@ export const getSwarmNodes = async (serverId?: string) => {
 		}
 
 		if (stderr) {
-			console.error(`Error: ${stderr}`);
-			return;
+			const stderrLower = stderr.toLowerCase();
+			if (
+				stderrLower.includes("this node is not a swarm manager") ||
+				stderrLower.includes("swarm is not initialized") ||
+				stderrLower.includes("this node is not part of a swarm")
+			) {
+				console.warn("Docker Swarm is not initialized:", stderr);
+				return [];
+			}
+			console.error(`Error getting swarm nodes: ${stderr}`);
+			return [];
 		}
 
-		const nodesArray = stdout
-			.trim()
-			.split("\n")
-			.map((line) => JSON.parse(line));
+		if (!stdout || stdout.trim() === "") {
+			return [];
+		}
+
+		const lines = stdout.trim().split("\n").filter((line) => line.trim() !== "");
+		if (lines.length === 0) {
+			return [];
+		}
+
+		const nodesArray = lines.map((line) => {
+			try {
+				return JSON.parse(line);
+			} catch (parseError) {
+				console.error("Failed to parse node line:", line, parseError);
+				return null;
+			}
+		}).filter((node) => node !== null);
+
 		return nodesArray;
-	} catch {}
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		const errorLower = errorMessage.toLowerCase();
+		
+		if (
+			errorLower.includes("swarm") &&
+			(errorLower.includes("not initialized") ||
+			 errorLower.includes("not a swarm manager") ||
+			 errorLower.includes("not part of a swarm"))
+		) {
+			console.warn("Docker Swarm is not initialized");
+			return [];
+		}
+		
+		console.error("Error getting swarm nodes:", error);
+		return [];
+	}
 };
 
 export const getNodeInfo = async (nodeId: string, serverId?: string) => {
@@ -398,14 +437,43 @@ export const getNodeInfo = async (nodeId: string, serverId?: string) => {
 		}
 
 		if (stderr) {
-			console.error(`Error: ${stderr}`);
-			return;
+			const stderrLower = stderr.toLowerCase();
+			if (
+				stderrLower.includes("swarm") &&
+				(stderrLower.includes("not initialized") ||
+				 stderrLower.includes("not a swarm manager") ||
+				 stderrLower.includes("not part of a swarm"))
+			) {
+				console.warn("Docker Swarm is not initialized:", stderr);
+				return null;
+			}
+			console.error(`Error getting node info: ${stderr}`);
+			return null;
+		}
+
+		if (!stdout || stdout.trim() === "") {
+			return null;
 		}
 
 		const nodeInfo = JSON.parse(stdout);
-
 		return nodeInfo;
-	} catch {}
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		const errorLower = errorMessage.toLowerCase();
+		
+		if (
+			errorLower.includes("swarm") &&
+			(errorLower.includes("not initialized") ||
+			 errorLower.includes("not a swarm manager") ||
+			 errorLower.includes("not part of a swarm"))
+		) {
+			console.warn("Docker Swarm is not initialized");
+			return null;
+		}
+		
+		console.error("Error getting node info:", error);
+		return null;
+	}
 };
 
 export const getNodeApplications = async (serverId?: string) => {
@@ -420,24 +488,62 @@ export const getNodeApplications = async (serverId?: string) => {
 			stderr = result.stderr;
 		} else {
 			const result = await execAsync(command);
-
 			stdout = result.stdout;
 			stderr = result.stderr;
 		}
 
 		if (stderr) {
-			console.error(`Error: ${stderr}`);
-			return;
+			const stderrLower = stderr.toLowerCase();
+			if (
+				stderrLower.includes("this node is not a swarm manager") ||
+				stderrLower.includes("swarm is not initialized") ||
+				stderrLower.includes("this node is not part of a swarm")
+			) {
+				console.warn("Docker Swarm is not initialized:", stderr);
+				return [];
+			}
+			console.error(`Error getting node applications: ${stderr}`);
+			return [];
 		}
 
-		const appArray = stdout
-			.trim()
-			.split("\n")
-			.map((line) => JSON.parse(line))
-			.filter((service) => !service.Name.startsWith("dokploy-"));
+		if (!stdout || stdout.trim() === "") {
+			return [];
+		}
+
+		const lines = stdout.trim().split("\n").filter((line) => line.trim() !== "");
+		if (lines.length === 0) {
+			return [];
+		}
+
+		const appArray = lines
+			.map((line) => {
+				try {
+					return JSON.parse(line);
+				} catch (parseError) {
+					console.error("Failed to parse service line:", line, parseError);
+					return null;
+				}
+			})
+			.filter((service) => service !== null && !service.Name?.startsWith("dokploy-"));
 
 		return appArray;
-	} catch {}
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		const errorLower = errorMessage.toLowerCase();
+		
+		if (
+			errorLower.includes("swarm") &&
+			(errorLower.includes("not initialized") ||
+			 errorLower.includes("not a swarm manager") ||
+			 errorLower.includes("not part of a swarm"))
+		) {
+			console.warn("Docker Swarm is not initialized");
+			return [];
+		}
+		
+		console.error("Error getting node applications:", error);
+		return [];
+	}
 };
 
 export const getApplicationInfo = async (

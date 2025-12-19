@@ -280,7 +280,12 @@ export default function Home({ IS_CLOUD }: Props) {
 										<FormItem>
 											<FormLabel>Email</FormLabel>
 											<FormControl>
-												<Input placeholder="john@example.com" {...field} />
+												<Input
+													type="email"
+													autoComplete="email"
+													placeholder="john@example.com"
+													{...field}
+												/>
 											</FormControl>
 											<FormMessage />
 										</FormItem>

@@ -40,13 +40,13 @@ export const ShowTraefikFile = ({ path, serverId }: Props) => {
 	} = api.settings.readTraefikFile.useQuery(
 		{
 			path,
-			serverId,
+			...(serverId && { serverId }),
 		},
 		{
 			enabled: !!path,
 		},
 	);
-	const [canEdit, setCanEdit] = useState(true);
+	const [isLocked, setIsLocked] = useState(true);
 
 	const { mutateAsync, isLoading, error, isError } =
 		api.settings.updateTraefikFile.useMutation();
@@ -55,7 +55,7 @@ export const ShowTraefikFile = ({ path, serverId }: Props) => {
 		defaultValues: {
 			traefikConfig: "",
 		},
-		disabled: canEdit,
+		disabled: isLocked,
 		resolver: zodResolver(UpdateServerMiddlewareConfigSchema),
 	});
 
@@ -78,7 +78,7 @@ export const ShowTraefikFile = ({ path, serverId }: Props) => {
 		await mutateAsync({
 			traefikConfig: data.traefikConfig,
 			path,
-			serverId,
+			...(serverId && { serverId }),
 		})
 			.then(async () => {
 				toast.success("Traefik config Updated");
@@ -142,10 +142,10 @@ routers:
 												variant="secondary"
 												type="button"
 												onClick={async () => {
-													setCanEdit(!canEdit);
+													setIsLocked(!isLocked);
 												}}
 											>
-												{canEdit ? "Unlock" : "Lock"}
+												{isLocked ? "Unlock" : "Lock"}
 											</Button>
 										</div>
 									</FormItem>
@@ -156,7 +156,7 @@ routers:
 					<div className="flex justify-end">
 						<Button
 							isLoading={isLoading}
-							disabled={canEdit || isLoading}
+							disabled={isLocked || isLoading}
 							type="submit"
 						>
 							Update

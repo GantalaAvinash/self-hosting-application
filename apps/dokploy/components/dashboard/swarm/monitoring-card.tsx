@@ -43,12 +43,41 @@ export default function SwarmMonitorCard({ serverId }: Props) {
 		);
 	}
 
-	if (!nodes) {
+	if (nodes === null || nodes === undefined) {
 		return (
 			<div className="w-full max-w-7xl mx-auto">
 				<div className="mb-6 border min-h-[55vh] flex justify-center items-center rounded-lg h-full">
-					<div className="flex items-center justify-center h-full  text-destructive">
-						<span>Failed to load data</span>
+					<div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+						<span className="text-destructive font-medium">Failed to load Swarm data</span>
+						<span className="text-sm text-center px-4">
+							Docker Swarm may not be initialized. Please initialize Swarm mode to view nodes.
+						</span>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (nodes.length === 0) {
+		return (
+			<div className="w-full max-w-7xl mx-auto">
+				<div className="mb-6 border min-h-[55vh] flex justify-center items-center rounded-lg h-full">
+					<div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+						<span className="font-medium">No Swarm nodes found</span>
+						<span className="text-sm text-center px-4">
+							Docker Swarm is not initialized or no nodes are available. Initialize Swarm mode to get started.
+						</span>
+						{!serverId && (
+							<Button
+								onClick={() =>
+									window.location.replace("/dashboard/settings/cluster")
+								}
+								className="mt-4"
+							>
+								<Settings className="mr-2 h-4 w-4" />
+								Initialize Swarm
+							</Button>
+						)}
 					</div>
 				</div>
 			</div>

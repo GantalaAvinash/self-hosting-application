@@ -373,16 +373,34 @@ export const checkPortInUse = async (
 	serverId?: string,
 ): Promise<{ isInUse: boolean; conflictingContainer?: string }> => {
 	try {
-		const command = `docker ps -a --format '{{.Names}}' | grep -v '^dokploy-traefik$' | while read name; do docker port "$name" 2>/dev/null | grep -q ':${port}' && echo "$name" && break; done || true`;
+		const command = `docker ps -a --format '{{.Names}}' | grep -v '^dokploy-traefik$' | while read name; do docker port "$name" 2>/dev/null | grep -E ':[0-9]+->' | grep -q ':${port}' && echo "$name" && break; done || true`;
 		const { stdout } = serverId
 			? await execAsyncRemote(serverId, command)
 			: await execAsync(command);
 
 		const container = stdout.trim();
 
+		if (container) {
+			return {
+				isInUse: true,
+				conflictingContainer: container,
+			};
+		}
+
+		const systemCheckCommand = `netstat -tuln 2>/dev/null | grep -q ':${port} ' || ss -tuln 2>/dev/null | grep -q ':${port}' || true`;
+		const { stdout: systemCheck } = serverId
+			? await execAsyncRemote(serverId, systemCheckCommand)
+			: await execAsync(systemCheckCommand);
+
+		if (systemCheck.trim()) {
+			return {
+				isInUse: true,
+				conflictingContainer: "system service",
+			};
+		}
+
 		return {
-			isInUse: !!container,
-			conflictingContainer: container || undefined,
+			isInUse: false,
 		};
 	} catch (error) {
 		console.error("Error checking port availability:", error);

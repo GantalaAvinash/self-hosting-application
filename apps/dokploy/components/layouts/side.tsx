@@ -150,6 +150,13 @@ const MENU: Menu = {
 			title: "Email Hosting",
 			url: "/dashboard/email",
 			icon: Mail,
+			// Only enabled for owners/admins or members with email access
+			isEnabled: ({ auth }) =>
+				!!(
+					auth?.role === "owner" ||
+					auth?.role === "admin" ||
+					auth?.canAccessToEmail
+				),
 		},
 		{
 			isSingle: true,

@@ -24,9 +24,7 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 		error,
 		isError,
 	} = api.settings.readDirectories.useQuery(
-		{
-			serverId,
-		},
+		serverId ? { serverId } : {},
 		{
 			retry: 2,
 		},
@@ -47,8 +45,31 @@ export const ShowTraefikSystem = ({ serverId }: Props) => {
 						</CardDescription>
 
 						<AlertBlock type="warning">
-							Adding invalid configuration to existing files, can break your
-							Traefik instance, preventing access to your applications.
+							<div className="space-y-2">
+								<p className="font-medium">
+									⚠️ Warning: Invalid configuration can break your Traefik instance
+								</p>
+								<ul className="list-disc list-inside space-y-1 text-sm">
+									<li>
+										Adding invalid configuration to existing files can prevent
+										access to your applications
+									</li>
+									<li>
+										Port collisions with other containers or system services will
+										cause Traefik to fail
+									</li>
+									<li>
+										Default Traefik ports (80, 443) are reserved and cannot be
+										modified
+									</li>
+									<li>
+										Always validate YAML syntax before saving configuration files
+									</li>
+									<li>
+										Test changes in a non-production environment first
+									</li>
+								</ul>
+							</div>
 						</AlertBlock>
 					</CardHeader>
 					<CardContent className="space-y-2 py-8 border-t">
