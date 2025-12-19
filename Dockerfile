@@ -26,7 +26,12 @@ RUN pnpm --filter=@dokploy/server build && \
 RUN ls -la /usr/src/app/packages/server/dist/ | head -5 && \
     cat /usr/src/app/packages/server/package.json | grep -A 2 '"exports"' | head -5
 
+# Ensure workspace is properly linked
+RUN pnpm install --frozen-lockfile
+
 # Build dokploy app (Next.js will use the built server package from dist)
+# Use standalone output to avoid module resolution issues
+ENV NEXT_STANDALONE=true
 RUN pnpm --filter=./apps/dokploy run build
 
 # Deploy only production dependencies for dokploy app
