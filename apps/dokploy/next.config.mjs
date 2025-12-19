@@ -25,6 +25,10 @@ const nextConfig = {
 		locales: ["en"],
 		defaultLocale: "en",
 	},
+	// Disable Turbopack to use webpack for better monorepo module resolution
+	experimental: {
+		turbo: false,
+	},
 };
 
 export default nextConfig;
