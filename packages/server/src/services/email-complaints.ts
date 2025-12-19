@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { emailComplaints, emailReputationMetrics } from "../db/schema";
 import { addToSuppressionList } from "./email-suppressions";
-import { updateReputationMetrics } from "./email-reputation";
+import { updateReputationMetrics as updateReputationMetricsFromReputation } from "./email-reputation";
 
 export type EmailComplaint = typeof emailComplaints.$inferSelect;
 
@@ -49,7 +49,7 @@ export const processComplaint = async (input: {
   });
 
   // Update reputation metrics (will recalculate complaint rate)
-  await updateReputationMetrics(input.emailDomainId);
+  await updateReputationMetricsFromReputation(input.emailDomainId);
 
   return complaint;
 };
