@@ -17,13 +17,16 @@ RUN pnpm install -g tsx
 # Install dependencies (with dev dependencies for build)
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
-# Build server package first
-RUN pnpm --filter=@dokploy/server build
+# Build server package first and switch to dist exports
+RUN pnpm --filter=@dokploy/server build && \
+    cd /usr/src/app/packages/server && \
+    node scripts/switchToDist.js
 
-# Verify server package is built and linked
-RUN ls -la /usr/src/app/packages/server/dist/ | head -5 || echo "Server dist not found"
+# Verify server package is built and exports are switched
+RUN ls -la /usr/src/app/packages/server/dist/ | head -5 && \
+    cat /usr/src/app/packages/server/package.json | grep -A 2 '"exports"' | head -5
 
-# Build dokploy app (Next.js will use the built server package)
+# Build dokploy app (Next.js will use the built server package from dist)
 RUN pnpm --filter=./apps/dokploy run build
 
 # Deploy only production dependencies for dokploy app
