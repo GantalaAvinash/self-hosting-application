@@ -10,6 +10,16 @@ const nextConfig = {
 		ignoreBuildErrors: true,
 	},
 	transpilePackages: ["@dokploy/server"],
+	webpack: (config, { isServer }) => {
+		if (isServer) {
+			// Ensure @dokploy/server is resolved correctly during build
+			config.resolve.alias = {
+				...config.resolve.alias,
+				"@dokploy/server": require("path").resolve(__dirname, "../../packages/server"),
+			};
+		}
+		return config;
+	},
 	/**
 	 * If you are using `appDir` then you must comment the below `i18n` config out.
 	 *
